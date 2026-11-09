@@ -1,6 +1,10 @@
 # dpmi-intrude-poc
 DPMI debugger intrusion proof-of-concept for Windows 386
 
+NOTE: The technique described below will not work as such. The problem is that placing down a processor breakpoint over the VM86 breakpoint essentially breaks the OS, since so much stuff depends on it. You can't even unset the breakpoint, because doing so requires re-entering protected mode, but doing that requires calling into the same Vm86 breakpoint. However, an adapted version of the technique (untested) should work: set SystemROMBreakpoint=FALSE in SYSTEM.INI under [386Enh], then the ARPL will be located in RAM. Overwrite it (probably with a CCh INT3 instruction).
+
+======
+
 Debugging DPMI applications under Windows 386 can be difficult. The conventional technique to allow a debugger to retain control across the protected-mode switch is to hook INT 2Fh (the DOS API multiplex). INT 2F/1687 (from real/v86 mode) returns a protected-mode switch entry point that a would-be DPMI client can execute a far call to in order to switch itself into protected-mode. Execution resumes at the instruction just after the far call, with CS, DS, ES, and SS registers replaced with protected-mode selectors aliasing their real-mode contents before the switch. 
 
 The debugger's hook passes through handling for all API requests except for AX=1687h. For that one, it gets the DPMI server's true entry point, but instead hands off its own, allowing it to take control just before the switch to protected-mode (i.e. the debugger can do some initialization, call the server's entry point, then do some initialization in protected mode, hooking exception vectors and so forth, then start executing the debuggee). 
@@ -17,3 +21,6 @@ Potential issues
 I believe the ARPL instruction is used for other things. If I remember rightly, the same ARPL instruction is used for all (or at least most?) v86->ring 0 break points. For example, I believe IFSMGR's real-mode hook eventually executes an ARPL to call into the 32-bit filesystem to handle INT21 calls. As I recall, the way the same ARPL is "multiplexed" to provide multiple services takes advantage of the fact that there are 4096 combinations of segment:offset pairs to create the same linear address. 
 
 The problem is that the 386 processor breakpoints are based on linear addresses, so this could invoke spuriously. We can probably get around this by checking that the trapping CS:IP is the same as the DPMI entry point. 
+
+
+
